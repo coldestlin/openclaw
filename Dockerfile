@@ -1,5 +1,34 @@
 FROM node:22-bookworm
 
+# ========== System Dependencies ==========
+# cloudflared (Cloudflare Tunnel client)
+RUN curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
+    -o /usr/local/bin/cloudflared && chmod +x /usr/local/bin/cloudflared
+
+# Python3 + pip + common packages for scripts and tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-pip python3-venv \
+    ffmpeg \
+    sqlite3 \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python packages (break-system-packages for Debian 12+)
+RUN pip3 install --no-cache-dir --break-system-packages \
+    requests beautifulsoup4 \
+    pandas pillow \
+    httpx aiohttp
+
+# ========== Playwright + Chromium ==========
+# Install Playwright system dependencies for Chromium
+RUN npx playwright install-deps chromium
+# Install Chromium browser
+RUN npx playwright install chromium
+
+# ========== OpenCode AI Programming Assistant ==========
+RUN npm install -g opencode-ai@latest
+
+# ========== Original openclaw build ==========
 # Install Bun (required for build scripts)
 RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.bun/bin:${PATH}"
@@ -31,18 +60,22 @@ RUN pnpm ui:build
 
 ENV NODE_ENV=production
 
+# ========== Data Directory ==========
+# Create data directories for Fly Volume mount
+RUN mkdir -p /data/.openclaw /data/clawd
+
+# ========== Entrypoint ==========
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 # Allow non-root user to write temp files during runtime/tests.
-RUN chown -R node:node /app
+RUN chown -R node:node /app /data
 
 # Security hardening: Run as non-root user
-# The node:22-bookworm image includes a 'node' user (uid 1000)
-# This reduces the attack surface by preventing container escape via root privileges
 USER node
+WORKDIR /data/clawd
 
-# Start gateway server with default config.
-# Binds to loopback (127.0.0.1) by default for security.
-#
-# For container platforms requiring external health checks:
-#   1. Set OPENCLAW_GATEWAY_TOKEN or OPENCLAW_GATEWAY_PASSWORD env var
-#   2. Override CMD: ["node","openclaw.mjs","gateway","--allow-unconfigured","--bind","lan"]
-CMD ["node", "openclaw.mjs", "gateway", "--allow-unconfigured"]
+# Expose openclaw gateway port
+EXPOSE 18789
+
+ENTRYPOINT ["/entrypoint.sh"]
