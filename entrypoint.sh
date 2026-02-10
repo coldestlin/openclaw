@@ -60,5 +60,13 @@ fi
 
 # ========== Start openclaw gateway ==========
 echo "[entrypoint] Starting openclaw gateway..."
+
+# Generate internal token for gateway authentication
+# This is used internally; external access goes through Cloudflare Tunnel
+if [ -z "$OPENCLAW_GATEWAY_TOKEN" ]; then
+  export OPENCLAW_GATEWAY_TOKEN="internal-$(head -c 16 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9')"
+  echo "[entrypoint] Generated internal gateway token"
+fi
+
 cd /app
 exec node openclaw.mjs gateway --allow-unconfigured --bind lan --port 18789
