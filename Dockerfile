@@ -73,7 +73,7 @@ RUN chown -R node:node /app /data
 
 # Security hardening: Run as non-root user
 USER node
-WORKDIR /data/clawd
+WORKDIR /app
 
 # Expose openclaw gateway port
 EXPOSE 18789
