@@ -17,7 +17,28 @@ fi
 # ========== Start cloudflared (Named Tunnel) ==========
 if [ -n "$TUNNEL_TOKEN" ]; then
   echo "[entrypoint] Starting cloudflared tunnel..."
-  cloudflared tunnel --no-autoupdate run --token "$TUNNEL_TOKEN" &
+
+  # Generate cloudflared config file with ingress rules
+  # The Cloudflare API doesn't support configuring ingress via API tokens,
+  # so we configure it locally here.
+  CLOUDFLARED_CONFIG="/tmp/cloudflared-config.yml"
+
+  if [ -n "$TUNNEL_HOSTNAME" ]; then
+    echo "[entrypoint] Configuring tunnel for hostname: $TUNNEL_HOSTNAME"
+    cat > "$CLOUDFLARED_CONFIG" << EOF
+tunnel: auto
+ingress:
+  - hostname: $TUNNEL_HOSTNAME
+    service: http://localhost:18789
+  - service: http_status:404
+EOF
+    cloudflared tunnel --no-autoupdate --config "$CLOUDFLARED_CONFIG" run --token "$TUNNEL_TOKEN" &
+  else
+    # Fallback: run without config (may not work if remote config not set)
+    echo "[entrypoint] Warning: No TUNNEL_HOSTNAME provided, running with default config"
+    cloudflared tunnel --no-autoupdate run --token "$TUNNEL_TOKEN" &
+  fi
+
   CLOUDFLARED_PID=$!
   sleep 2
 
