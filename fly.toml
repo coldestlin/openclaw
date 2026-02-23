@@ -18,7 +18,21 @@ NODE_OPTIONS = "--max-old-space-size=1536"
 # When creating Machines via API, configs are passed in the API call directly
 # See apps/core/src/fly/machines.ts
 
-# IMPORTANT: No [http_service] block
-# We use Cloudflare Tunnel for routing, not Fly Proxy.
-# Fly Proxy would see "zero traffic" and may unexpectedly suspend machines.
-# Machine lifecycle is controlled entirely by ManagerDO + Alarm.
+# Fly Proxy routing via Fly-Force-Instance-Id header
+# Machine lifecycle is controlled by ManagerDO (auto_stop/auto_start = false)
+[http_service]
+internal_port = 18789
+force_https = true
+auto_stop_machines = "off" # DO 手动管控
+auto_start_machines = false # DO 手动管控
+min_machines_running = 0
+
+[http_service.concurrency]
+type = "requests"
+soft_limit = 25
+
+# VM configuration for fly deploy
+[[vm]]
+memory = "2gb"
+cpu_kind = "shared"
+cpus = 1

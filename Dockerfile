@@ -1,9 +1,8 @@
 FROM node:22-bookworm
 
 # ========== System Dependencies ==========
-# cloudflared (Cloudflare Tunnel client)
-RUN curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
-    -o /usr/local/bin/cloudflared && chmod +x /usr/local/bin/cloudflared
+# Note: cloudflared removed - using Fly-Force-Instance-Id routing instead
+# See: https://fly.io/docs/networking/private-networking/#fly-force-instance-id
 
 # Python3 + pip + common packages for scripts and tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
