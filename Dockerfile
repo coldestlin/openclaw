@@ -59,6 +59,11 @@ RUN pnpm ui:build
 
 ENV NODE_ENV=production
 
+# ========== Default Configuration ==========
+# Copy default config template for SaaS deployment
+# This will be copied to /data/.openclaw/openclaw.json on first container startup
+COPY openclaw.default.json /opt/openclaw/openclaw.default.json
+
 # ========== Data Directory ==========
 # Create data directories for Fly Volume mount
 RUN mkdir -p /data/.openclaw /data/clawd

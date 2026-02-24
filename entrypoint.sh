@@ -21,6 +21,16 @@ if [ ! -f "/data/.openclaw-initialized" ]; then
   touch /data/.openclaw-initialized
 fi
 
+# ========== Copy default configuration ==========
+# Copy default config if not exists (for fresh SaaS instances)
+# This allows environment variables to configure the OpenClaw gateway
+DEFAULT_CONFIG="/opt/openclaw/openclaw.default.json"
+CONFIG_PATH="/data/.openclaw/openclaw.json"
+if [ -f "$DEFAULT_CONFIG" ] && [ ! -f "$CONFIG_PATH" ]; then
+  cp "$DEFAULT_CONFIG" "$CONFIG_PATH"
+  echo "[entrypoint] Copied default configuration to $CONFIG_PATH"
+fi
+
 # ========== Start openclaw gateway ==========
 echo "[entrypoint] Starting openclaw gateway..."
 
