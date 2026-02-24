@@ -2,6 +2,7 @@ import type { IncomingMessage } from "node:http";
 import { timingSafeEqual } from "node:crypto";
 import type { GatewayAuthConfig, GatewayTailscaleMode } from "../config/config.js";
 import { readTailscaleWhoisIdentity, type TailscaleWhoisIdentity } from "../infra/tailscale.js";
+import { getBearerToken } from "./http-utils.js";
 import { isTrustedProxyAddress, parseForwardedForClientIp, resolveGatewayClientIp } from "./net.js";
 export type ResolvedGatewayAuthMode = "token" | "password";
 
@@ -264,10 +265,14 @@ export async function authorizeGatewayConnect(params: {
     if (!auth.token) {
       return { ok: false, reason: "token_missing_config" };
     }
-    if (!connectAuth?.token) {
+
+    // Priority: connectAuth.token > Authorization header
+    const providedToken = connectAuth?.token || (req ? getBearerToken(req) : undefined);
+
+    if (!providedToken) {
       return { ok: false, reason: "token_missing" };
     }
-    if (!safeEqual(connectAuth.token, auth.token)) {
+    if (!safeEqual(providedToken, auth.token)) {
       return { ok: false, reason: "token_mismatch" };
     }
     return { ok: true, method: "token" };
