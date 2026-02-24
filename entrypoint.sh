@@ -22,13 +22,21 @@ if [ ! -f "/data/.openclaw-initialized" ]; then
 fi
 
 # ========== Copy default configuration ==========
-# Copy default config if not exists (for fresh SaaS instances)
-# This allows environment variables to configure the OpenClaw gateway
+# Copy default config for SaaS instances
+# OPENCLAW_RESET_CONFIG=true forces overwrite (useful for config updates via image)
 DEFAULT_CONFIG="/opt/openclaw/openclaw.default.json"
 CONFIG_PATH="/data/.openclaw/openclaw.json"
-if [ -f "$DEFAULT_CONFIG" ] && [ ! -f "$CONFIG_PATH" ]; then
-  cp "$DEFAULT_CONFIG" "$CONFIG_PATH"
-  echo "[entrypoint] Copied default configuration to $CONFIG_PATH"
+
+if [ -f "$DEFAULT_CONFIG" ]; then
+  if [ "$OPENCLAW_RESET_CONFIG" = "true" ]; then
+    cp "$DEFAULT_CONFIG" "$CONFIG_PATH"
+    echo "[entrypoint] Reset configuration (OPENCLAW_RESET_CONFIG=true)"
+  elif [ ! -f "$CONFIG_PATH" ]; then
+    cp "$DEFAULT_CONFIG" "$CONFIG_PATH"
+    echo "[entrypoint] Copied default configuration to $CONFIG_PATH"
+  else
+    echo "[entrypoint] Using existing configuration at $CONFIG_PATH"
+  fi
 fi
 
 # ========== Start openclaw gateway ==========
