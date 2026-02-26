@@ -26,6 +26,7 @@ import { loadVoiceWakeConfig } from "../../../infra/voicewake.js";
 import { rawDataToString } from "../../../infra/ws.js";
 import { isGatewayCliClient, isWebchatClient } from "../../../utils/message-channel.js";
 import { authorizeGatewayConnect, isLocalDirectRequest } from "../../auth.js";
+import { getBearerToken } from "../../http-utils.js";
 import { buildDeviceAuthPayload } from "../../device-auth.js";
 import { isLoopbackAddress, isTrustedProxyAddress, resolveGatewayClientIp } from "../../net.js";
 import { resolveNodeCommandAllowlist } from "../../node-command-policy.js";
@@ -400,7 +401,9 @@ export function attachGatewayWsMessageHandler(params: {
 
         const deviceRaw = connectParams.device;
         let devicePublicKey: string | null = null;
-        const hasTokenAuth = Boolean(connectParams.auth?.token);
+        // Check both WebSocket connect params and HTTP Authorization header for token auth
+        const headerBearerToken = getBearerToken(upgradeReq);
+        const hasTokenAuth = Boolean(connectParams.auth?.token || headerBearerToken);
         const hasPasswordAuth = Boolean(connectParams.auth?.password);
         const hasSharedAuth = hasTokenAuth || hasPasswordAuth;
         const allowInsecureControlUi =
