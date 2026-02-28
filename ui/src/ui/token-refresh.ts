@@ -75,6 +75,14 @@ export async function startTokenRefresh(): Promise<void> {
     return; // Already running
   }
 
+  // Dev mode: skip auto-refresh to avoid race condition with Dashboard
+  // (Supabase refresh_token is one-time use, simultaneous refresh causes "already_used" error)
+  // Dashboard sets the cookie via /_auth, that's sufficient for dev testing (token valid 1hr)
+  if (window.location.hostname.includes("localhost")) {
+    console.log("[token-refresh] Dev mode detected, skipping auto-refresh (token valid 1hr)");
+    return;
+  }
+
   // Detect environment
   const isCloud = await detectCloudEnvironment();
   if (!isCloud) {

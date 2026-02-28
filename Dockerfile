@@ -10,7 +10,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     sqlite3 \
     git \
-    vim-common \
+    vim \
+    less \
     jq \
     curl \
     wget \
