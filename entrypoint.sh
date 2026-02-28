@@ -21,6 +21,10 @@ if [ ! -f "/data/.openclaw-initialized" ]; then
   touch /data/.openclaw-initialized
 fi
 
+# ========== Ensure proper permissions ==========
+# Create temp directory for openclaw
+mkdir -p /tmp/openclaw
+
 # ========== Copy default configuration ==========
 # Copy default config for SaaS instances
 # OPENCLAW_RESET_CONFIG=true forces overwrite (useful for config updates via image)

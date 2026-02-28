@@ -10,12 +10,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     sqlite3 \
     git \
+    vim-common \
+    jq \
+    curl \
+    wget \
+    telnet \
+    netcat-openbsd \
+    dnsutils \
+    iputils-ping \
+    net-tools \
+    iproute2 \
+    procps \
+    file \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python packages (break-system-packages for Debian 12+)
 RUN pip3 install --no-cache-dir --break-system-packages \
-    requests beautifulsoup4 \
-    pandas pillow \
+    requests beautifulsoup4 pillow \
     httpx aiohttp
 
 # ========== Playwright + Chromium ==========
@@ -24,8 +36,6 @@ RUN npx playwright install-deps chromium
 # Install Chromium browser
 RUN npx playwright install chromium
 
-# ========== OpenCode AI Programming Assistant ==========
-RUN npm install -g opencode-ai@latest
 
 # ========== Original openclaw build ==========
 # Install Bun (required for build scripts)
@@ -66,17 +76,20 @@ COPY openclaw.default.json /opt/openclaw/openclaw.default.json
 
 # ========== Data Directory ==========
 # Create data directories for Fly Volume mount
-RUN mkdir -p /data/.openclaw /data/clawd
+RUN mkdir -p /data/.openclaw /data/clawd /data/workspace
+
+# ========== CLI Commands ==========
+# Add openclaw command to PATH
+RUN ln -s /app/openclaw.mjs /usr/local/bin/openclaw && \
+    chmod +x /app/openclaw.mjs
+
+# Install clawhub CLI
+RUN npm install -g clawhub
 
 # ========== Entrypoint ==========
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Allow non-root user to write temp files during runtime/tests.
-RUN chown -R node:node /app /data
-
-# Security hardening: Run as non-root user
-USER node
 WORKDIR /app
 
 # Expose openclaw gateway port

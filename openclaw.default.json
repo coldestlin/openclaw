@@ -1,7 +1,7 @@
 {
   "env": {
     "vars": {
-      "OPENCLAW_DEFAULT_MODEL": "ski-gateway-openai/gpt-5.2",
+      "OPENCLAW_DEFAULT_MODEL": "ski-gateway-openai/MiniMax-M2.5",
       "OPENCLAW_STATE_DIR": "/data",
       "OPENCLAW_WORKSPACE": "/data/workspace",
       "OPENCLAW_GATEWAY_CONTROL_UI_ALLOWED_ORIGINS": "https://openclaw.ski",
@@ -16,7 +16,7 @@
     "controlUi": {
       "enabled": true,
       "allowedOrigins": ["${OPENCLAW_GATEWAY_CONTROL_UI_ALLOWED_ORIGINS}"],
-      "allowInsecureAuth": true 
+      "allowInsecureAuth": true
     },
     "auth": {
       "mode": "token",
@@ -32,12 +32,31 @@
         "api": "openai-completions",
         "models": [
           {
-            "id": "ski-gateway-openai/gpt-5.2",
-            "name": "GPT-5.2 (via SKI Gateway)"
+            "id": "MiniMax-M2.5",
+            "name": "MiniMax-M2.5",
+            "reasoning": false,
+            "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 1000000,
+            "maxTokens": 65536
           },
           {
-            "id": "ski-gateway-openai/gpt-5-mini",
-            "name": "GPT-5 Mini (via SKI Gateway)"
+            "id": "glm-5",
+            "name": "glm-5",
+            "reasoning": false,
+            "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 202752,
+            "maxTokens": 16384
+          },
+          {
+            "id": "kimi-k2.5",
+            "name": "kimi-k2.5",
+            "reasoning": false,
+            "input": ["text", "image"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 262144,
+            "maxTokens": 32768
           }
         ]
       },
