@@ -1,14 +1,12 @@
 {
   "env": {
     "vars": {
-      "OPENCLAW_DEFAULT_MODEL": "ski-gateway-openai/MiniMax-M2.5",
+      "OPENCLAW_DEFAULT_MODEL": "ski-ai-gateway/MiniMax-M2.5",
       "OPENCLAW_STATE_DIR": "/data",
       "OPENCLAW_WORKSPACE": "/data/workspace",
       "OPENCLAW_GATEWAY_CONTROL_UI_ALLOWED_ORIGINS": "https://openclaw.ski",
-      "SKI_GATEWAY_OPENAI_BASE_URL": "https://api.ski.example.com/openai/v1",
-      "SKI_GATEWAY_CLAUDE_BASE_URL": "https://api.ski.example.com/anthropic/v1",
-      "SKI_GATEWAY_OPENAI_API_KEY": "xxx",
-      "SKI_GATEWAY_CLAUDE_API_KEY": "xxx"
+      "SKI_AI_GATEWAY": "https://api.ski.example.com/openai/v1",
+      "SKI_AI_GATEWAY_API_KEY": "xxx"
     }
   },
   "gateway": {
@@ -26,9 +24,9 @@
   "models": {
     "mode": "merge",
     "providers": {
-      "ski-gateway-openai": {
-        "baseUrl": "${SKI_GATEWAY_OPENAI_BASE_URL}",
-        "apiKey": "${SKI_GATEWAY_OPENAI_API_KEY}",
+      "ski-ai-gateway": {
+        "baseUrl": "${SKI_AI_GATEWAY}",
+        "apiKey": "${SKI_AI_GATEWAY_API_KEY}",
         "api": "openai-completions",
         "models": [
           {
@@ -59,21 +57,6 @@
             "maxTokens": 32768
           }
         ]
-      },
-      "ski-gateway-claude": {
-        "baseUrl": "${SKI_GATEWAY_CLAUDE_BASE_URL}",
-        "apiKey": "${SKI_GATEWAY_CLAUDE_API_KEY}",
-        "api": "anthropic-messages",
-        "models": [
-          {
-            "id": "ski-gateway-claude/claude-opus-4-6",
-            "name": "Claude Opus 4.6 (via SKI Gateway)"
-          },
-          {
-            "id": "ski-gateway-claude/claude-sonnet-4-5",
-            "name": "Claude Sonnet 4.5 (via SKI Gateway)"
-          }
-        ]
       }
     }
   },
@@ -81,11 +64,12 @@
     "defaults": {
       "model": {
         "primary": "${OPENCLAW_DEFAULT_MODEL}",
-        "fallbacks": ["ski-gateway-claude/claude-sonnet-4-5"]
+        "fallbacks": ["ski-ai-gateway/kimi-k2.5"]
       },
       "imageModel": {
-        "primary": "ski-gateway-claude/claude-sonnet-4-5"
+        "primary": "ski-ai-gateway/kimi-k2.5"
       },
+      "mediaMaxMb": 10,
       "workspace": "${OPENCLAW_WORKSPACE}"
     },
     "list": [
@@ -98,6 +82,17 @@
         "workspace": "${OPENCLAW_WORKSPACE}"
       }
     ]
+  },
+  "tools": {
+    "media": {
+      "image": {
+        "enabled": true,
+        "maxBytes": 10485760,
+        "maxChars": 10000,
+        "timeoutSeconds": 60,
+        "attachments": "inline"
+      }
+    }
   },
   "browser": {
     "enabled": true,
