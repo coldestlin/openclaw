@@ -87,12 +87,12 @@ export async function startTokenRefresh(): Promise<void> {
   // Refresh immediately on start
   await refreshToken();
 
-  // Then refresh every 50 minutes (JWT typically expires in 60 minutes)
+  // Then refresh every 30 minutes (JWT typically expires in 60 minutes)
   tokenRefreshInterval = setInterval(
     () => {
       void refreshToken();
     },
-    50 * 60 * 1000,
+    30 * 60 * 1000,
   );
 }
 

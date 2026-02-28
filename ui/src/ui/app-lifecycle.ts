@@ -17,6 +17,7 @@ import {
   syncTabWithLocation,
   syncThemeWithSettings,
 } from "./app-settings.ts";
+import { startHeartbeat, stopHeartbeat } from "./heartbeat.ts";
 import { startTokenRefresh, stopTokenRefresh } from "./token-refresh.ts";
 
 type LifecycleHost = {
@@ -46,6 +47,8 @@ export function handleConnected(host: LifecycleHost) {
   startNodesPolling(host as unknown as Parameters<typeof startNodesPolling>[0]);
   // Start token refresh for OpenClaw Cloud environment
   void startTokenRefresh();
+  // Start heartbeat to keep instance alive (30s interval)
+  void startHeartbeat();
   if (host.tab === "logs") {
     startLogsPolling(host as unknown as Parameters<typeof startLogsPolling>[0]);
   }
@@ -64,6 +67,7 @@ export function handleDisconnected(host: LifecycleHost) {
   stopLogsPolling(host as unknown as Parameters<typeof stopLogsPolling>[0]);
   stopDebugPolling(host as unknown as Parameters<typeof stopDebugPolling>[0]);
   stopTokenRefresh();
+  stopHeartbeat();
   detachThemeListener(host as unknown as Parameters<typeof detachThemeListener>[0]);
   host.topbarObserver?.disconnect();
   host.topbarObserver = null;
