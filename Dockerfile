@@ -94,6 +94,8 @@ ENV PNPM_HOME=/data/.packages/pnpm
 
 # Python (pip) configuration
 ENV PYTHONUSERBASE=/data/.packages/python
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
+ENV PIP_USER=true
 
 # System PATH with persistent package bins
 ENV PATH="/data/.packages/npm/bin:/data/.packages/pnpm:/data/.packages/python/bin:${PATH}"

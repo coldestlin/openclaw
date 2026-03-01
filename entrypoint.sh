@@ -29,9 +29,28 @@ mkdir -p "$PERSISTENT_PACKAGES/python/bin" "$PERSISTENT_PACKAGES/python/lib"
 # This ensures npm install -g uses the persistent directory
 npm config set prefix "$PERSISTENT_PACKAGES/npm"
 
-# Note: Environment variables (PERSISTENT_PACKAGES, NPM_CONFIG_PREFIX, PNPM_HOME,
-# PYTHONUSERBASE, PATH) are already set in Dockerfile and will be inherited by
-# all child processes via process.env, including SSH sessions.
+# Create global profile for all users (including SSH sessions)
+# This ensures environment variables are loaded for all shell sessions
+cat > /etc/profile.d/persistent-packages.sh << 'EOF'
+# Persistent package storage for npm, pnpm, and Python (pip)
+export PERSISTENT_PACKAGES=/data/.packages
+export NPM_CONFIG_PREFIX=/data/.packages/npm
+export PNPM_HOME=/data/.packages/pnpm
+export PYTHONUSERBASE=/data/.packages/python
+export PIP_BREAK_SYSTEM_PACKAGES=1
+export PIP_USER=true
+export PATH="/data/.packages/npm/bin:/data/.packages/pnpm:/data/.packages/python/bin:$PATH"
+EOF
+
+chmod +x /etc/profile.d/persistent-packages.sh
+
+# Source profile for the current shell
+source /etc/profile.d/persistent-packages.sh
+
+# Note: Environment variables are set in:
+# 1. Dockerfile (for build-time and initial runtime)
+# 2. /etc/profile.d/persistent-packages.sh (for all users including SSH)
+# This ensures they're available in all shell sessions
 
 # ========== Initialize data directory ==========
 if [ ! -f "/data/.openclaw-initialized" ]; then
