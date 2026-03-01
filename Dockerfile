@@ -49,10 +49,10 @@ WORKDIR /app
 
 ARG OPENCLAW_DOCKER_APT_PACKAGES=""
 RUN if [ -n "$OPENCLAW_DOCKER_APT_PACKAGES" ]; then \
-      apt-get update && \
-      DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $OPENCLAW_DOCKER_APT_PACKAGES && \
-      apt-get clean && \
-      rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*; \
+    apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $OPENCLAW_DOCKER_APT_PACKAGES && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*; \
     fi
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
@@ -68,7 +68,53 @@ RUN OPENCLAW_A2UI_SKIP_MISSING=1 pnpm build
 ENV OPENCLAW_PREFER_PNPM=1
 RUN pnpm ui:build
 
+# ========== CLI Commands ==========
+# Add openclaw command to PATH
+RUN ln -s /app/openclaw.mjs /usr/local/bin/openclaw && \
+    chmod +x /app/openclaw.mjs
+
+# Install clawhub CLI to system location (before setting persistent env vars)
+# This ensures clawhub is always available in the image
+RUN npm install -g clawhub
+
+# ========== Environment Variables ==========
+# OpenClaw state directory
+ENV OPENCLAW_STATE_DIR=/data
+
+# Persistent package storage (unified for npm, pnpm, pip)
+# Set these AFTER installing build-time packages so they don't affect build
+# These will be used for runtime package installations (user-installed packages)
+ENV PERSISTENT_PACKAGES=/data/.packages
+
+# npm configuration
+ENV NPM_CONFIG_PREFIX=/data/.packages/npm
+
+# pnpm configuration
+ENV PNPM_HOME=/data/.packages/pnpm
+
+# Python (pip) configuration
+ENV PYTHONUSERBASE=/data/.packages/python
+
+# System PATH with persistent package bins
+ENV PATH="/data/.packages/npm/bin:/data/.packages/pnpm:/data/.packages/python/bin:${PATH}"
+
 ENV NODE_ENV=production
+
+# ========== Clean up unnecessary files ==========
+# Remove build artifacts and development files to reduce image size
+RUN rm -rf \
+    Dockerfile \
+    fly.toml \
+    .git \
+    *.md \
+    **/*.test.ts \
+    **/*.spec.ts \
+    coverage \
+    .vscode \
+    .idea \
+    node_modules/.cache \
+    .bun-cache \
+    .pnpm-store
 
 # ========== Default Configuration ==========
 # Copy default config template for SaaS deployment
@@ -78,14 +124,6 @@ COPY openclaw.default.json /opt/openclaw/openclaw.default.json
 # ========== Data Directory ==========
 # Create data directories for Fly Volume mount
 RUN mkdir -p /data/.openclaw /data/clawd /data/workspace
-
-# ========== CLI Commands ==========
-# Add openclaw command to PATH
-RUN ln -s /app/openclaw.mjs /usr/local/bin/openclaw && \
-    chmod +x /app/openclaw.mjs
-
-# Install clawhub CLI
-RUN npm install -g clawhub
 
 # ========== Entrypoint ==========
 COPY entrypoint.sh /entrypoint.sh

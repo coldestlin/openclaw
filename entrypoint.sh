@@ -14,6 +14,25 @@ if [ ! -L "$HOME/.openclaw" ]; then
   ln -sf /data/.openclaw "$HOME/.openclaw"
 fi
 
+# ========== Persist user-installed packages ==========
+# Unified persistent storage for all package managers
+PERSISTENT_PACKAGES="/data/.packages"
+
+echo "[entrypoint] Setting up persistent storage for packages..."
+
+# Create physical directories
+mkdir -p "$PERSISTENT_PACKAGES/npm/bin" "$PERSISTENT_PACKAGES/npm/lib"
+mkdir -p "$PERSISTENT_PACKAGES/pnpm"
+mkdir -p "$PERSISTENT_PACKAGES/python/bin" "$PERSISTENT_PACKAGES/python/lib"
+
+# Configure NPM persistence (use config instead of symlinks for stability)
+# This ensures npm install -g uses the persistent directory
+npm config set prefix "$PERSISTENT_PACKAGES/npm"
+
+# Note: Environment variables (PERSISTENT_PACKAGES, NPM_CONFIG_PREFIX, PNPM_HOME,
+# PYTHONUSERBASE, PATH) are already set in Dockerfile and will be inherited by
+# all child processes via process.env, including SSH sessions.
+
 # ========== Initialize data directory ==========
 if [ ! -f "/data/.openclaw-initialized" ]; then
   echo "[entrypoint] Initializing data directory..."
