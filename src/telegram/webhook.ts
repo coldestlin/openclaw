@@ -1,7 +1,10 @@
+import type { Bot } from "grammy";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { webhookCallback } from "grammy";
 import { createServer } from "node:http";
 import type { OpenClawConfig } from "../config/config.js";
 import type { RuntimeEnv } from "../runtime.js";
+import type { TelegramHttpRequestHandler } from "./http/index.js";
 import { isDiagnosticsEnabled } from "../infra/diagnostic-events.js";
 import { formatErrorMessage } from "../infra/errors.js";
 import {
@@ -15,6 +18,7 @@ import { defaultRuntime } from "../runtime.js";
 import { resolveTelegramAllowedUpdates } from "./allowed-updates.js";
 import { withTelegramApiErrorLogging } from "./api-logging.js";
 import { createTelegramBot } from "./bot.js";
+import { normalizeTelegramWebhookPath } from "./http/index.js";
 
 export async function startTelegramWebhook(opts: {
   token: string;
@@ -124,4 +128,106 @@ export async function startTelegramWebhook(opts: {
   }
 
   return { server, bot, stop: shutdown };
+}
+
+export type CreateTelegramWebhookHandlerOpts = {
+  token: string;
+  accountId?: string;
+  config?: OpenClawConfig;
+  path?: string;
+  secret?: string;
+  runtime?: RuntimeEnv;
+  fetch?: typeof fetch;
+  publicUrl: string;
+  updateOffset?: {
+    lastUpdateId: number | null;
+    onUpdateId: (updateId: number) => void;
+  };
+};
+
+export type CreateTelegramWebhookHandlerResult = {
+  handler: TelegramHttpRequestHandler;
+  bot: Bot;
+  path: string;
+  stop: () => void;
+};
+
+export async function createTelegramWebhookHandler(
+  opts: CreateTelegramWebhookHandlerOpts,
+): Promise<CreateTelegramWebhookHandlerResult> {
+  const path = normalizeTelegramWebhookPath(opts.path);
+  const runtime = opts.runtime ?? defaultRuntime;
+  const diagnosticsEnabled = isDiagnosticsEnabled(opts.config);
+
+  const bot = createTelegramBot({
+    token: opts.token,
+    runtime,
+    proxyFetch: opts.fetch,
+    config: opts.config,
+    accountId: opts.accountId,
+    updateOffset: opts.updateOffset,
+  });
+
+  const grammyHandler = webhookCallback(bot, "http", {
+    secretToken: opts.secret,
+  });
+
+  if (diagnosticsEnabled) {
+    startDiagnosticHeartbeat();
+  }
+
+  const handler: TelegramHttpRequestHandler = async (req: IncomingMessage, res: ServerResponse) => {
+    if (req.method !== "POST") {
+      res.writeHead(404);
+      res.end();
+      return;
+    }
+    const startTime = Date.now();
+    if (diagnosticsEnabled) {
+      logWebhookReceived({ channel: "telegram", updateType: "telegram-post" });
+    }
+    try {
+      await grammyHandler(req, res);
+      if (diagnosticsEnabled) {
+        logWebhookProcessed({
+          channel: "telegram",
+          updateType: "telegram-post",
+          durationMs: Date.now() - startTime,
+        });
+      }
+    } catch (err) {
+      const errMsg = formatErrorMessage(err);
+      if (diagnosticsEnabled) {
+        logWebhookError({
+          channel: "telegram",
+          updateType: "telegram-post",
+          error: errMsg,
+        });
+      }
+      runtime.log?.(`webhook handler failed: ${errMsg}`);
+      if (!res.headersSent) {
+        res.writeHead(500);
+      }
+      res.end();
+    }
+  };
+
+  await withTelegramApiErrorLogging({
+    operation: "setWebhook",
+    runtime,
+    fn: () =>
+      bot.api.setWebhook(opts.publicUrl, {
+        secret_token: opts.secret,
+        allowed_updates: resolveTelegramAllowedUpdates(),
+      }),
+  });
+
+  const stop = () => {
+    void bot.stop();
+    if (diagnosticsEnabled) {
+      stopDiagnosticHeartbeat();
+    }
+  };
+
+  return { handler, bot, path, stop };
 }

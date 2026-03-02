@@ -10,10 +10,11 @@ import { registerUnhandledRejectionHandler } from "../infra/unhandled-rejections
 import { resolveTelegramAccount } from "./accounts.js";
 import { resolveTelegramAllowedUpdates } from "./allowed-updates.js";
 import { createTelegramBot } from "./bot.js";
+import { registerTelegramHttpHandler } from "./http/index.js";
 import { isRecoverableTelegramNetworkError } from "./network-errors.js";
 import { makeProxyFetch } from "./proxy.js";
 import { readTelegramUpdateOffset, writeTelegramUpdateOffset } from "./update-offset-store.js";
-import { startTelegramWebhook } from "./webhook.js";
+import { createTelegramWebhookHandler, startTelegramWebhook } from "./webhook.js";
 
 export type MonitorTelegramOpts = {
   token?: string;
@@ -151,6 +152,44 @@ export async function monitorTelegramProvider(opts: MonitorTelegramOpts = {}) {
     });
 
     if (opts.useWebhook) {
+      // Use Gateway mode when webhookUrl is provided (no webhookPort means use Gateway)
+      if (opts.webhookUrl && !opts.webhookPort) {
+        const webhookResult = await createTelegramWebhookHandler({
+          token,
+          accountId: account.accountId,
+          config: cfg,
+          path: opts.webhookPath,
+          secret: opts.webhookSecret,
+          runtime: opts.runtime,
+          fetch: proxyFetch,
+          publicUrl: opts.webhookUrl,
+          updateOffset: {
+            lastUpdateId,
+            onUpdateId: persistUpdateId,
+          },
+        });
+
+        const unregisterHttpHandler = registerTelegramHttpHandler({
+          path: webhookResult.path,
+          handler: webhookResult.handler,
+          log: opts.runtime?.log,
+          accountId: account.accountId,
+        });
+
+        opts.runtime?.log?.(`telegram http mode listening at ${webhookResult.path}`);
+
+        try {
+          await new Promise<void>((resolve) => {
+            opts.abortSignal?.addEventListener("abort", () => resolve(), { once: true });
+          });
+        } finally {
+          unregisterHttpHandler();
+          webhookResult.stop();
+        }
+        return;
+      }
+
+      // Standalone server mode (backward compatibility)
       await startTelegramWebhook({
         token,
         accountId: account.accountId,
