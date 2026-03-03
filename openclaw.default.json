@@ -1,0 +1,104 @@
+{
+  "env": {
+    "vars": {
+      "OPENCLAW_DEFAULT_MODEL": "ski-ai-gateway/MiniMax-M2.5",
+      "OPENCLAW_STATE_DIR": "/data",
+      "OPENCLAW_WORKSPACE": "/data/workspace",
+      "OPENCLAW_GATEWAY_CONTROL_UI_ALLOWED_ORIGINS": "https://openclaw.ski",
+      "SKI_AI_GATEWAY": "https://api.ski.example.com/openai/v1",
+      "SKI_AI_GATEWAY_API_KEY": "xxx"
+    }
+  },
+  "gateway": {
+    "port": 18789,
+    "controlUi": {
+      "enabled": true,
+      "allowedOrigins": ["${OPENCLAW_GATEWAY_CONTROL_UI_ALLOWED_ORIGINS}"],
+      "allowInsecureAuth": true
+    },
+    "auth": {
+      "mode": "token",
+      "token": "${OPENCLAW_GATEWAY_TOKEN}"
+    }
+  },
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "ski-ai-gateway": {
+        "baseUrl": "${SKI_AI_GATEWAY}",
+        "apiKey": "${SKI_AI_GATEWAY_API_KEY}",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "MiniMax-M2.5",
+            "name": "MiniMax-M2.5",
+            "reasoning": false,
+            "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 1000000,
+            "maxTokens": 65536
+          },
+          {
+            "id": "glm-5",
+            "name": "glm-5",
+            "reasoning": false,
+            "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 202752,
+            "maxTokens": 16384
+          },
+          {
+            "id": "kimi-k2.5",
+            "name": "kimi-k2.5",
+            "reasoning": false,
+            "input": ["text", "image"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 262144,
+            "maxTokens": 32768
+          }
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "${OPENCLAW_DEFAULT_MODEL}",
+        "fallbacks": ["ski-ai-gateway/kimi-k2.5"]
+      },
+      "imageModel": {
+        "primary": "ski-ai-gateway/kimi-k2.5"
+      },
+      "mediaMaxMb": 10,
+      "workspace": "${OPENCLAW_WORKSPACE}"
+    },
+    "list": [
+      {
+        "id": "main",
+        "default": true,
+        "identity": {
+          "name": "OpenClaw"
+        },
+        "workspace": "${OPENCLAW_WORKSPACE}"
+      }
+    ]
+  },
+  "tools": {
+    "media": {
+      "image": {
+        "enabled": true,
+        "maxBytes": 10485760,
+        "maxChars": 10000,
+        "timeoutSeconds": 60,
+        "attachments": {
+          "mode": "all",
+          "maxAttachments": 5
+        }
+      }
+    }
+  },
+  "browser": {
+    "enabled": true,
+    "headless": true
+  }
+}

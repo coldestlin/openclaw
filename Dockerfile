@@ -1,18 +1,44 @@
-FROM node:22-bookworm@sha256:cd7bcd2e7a1e6f72052feb023c7f6b722205d3fcab7bbcbd2d1bfdab10b1e935
+FROM node:22-bookworm
 
-# OCI base-image metadata for downstream image consumers.
-# If you change these annotations, also update:
-# - docs/install/docker.md ("Base image metadata" section)
-# - https://docs.openclaw.ai/install/docker
-LABEL org.opencontainers.image.base.name="docker.io/library/node:22-bookworm" \
-  org.opencontainers.image.base.digest="sha256:cd7bcd2e7a1e6f72052feb023c7f6b722205d3fcab7bbcbd2d1bfdab10b1e935" \
-  org.opencontainers.image.source="https://github.com/openclaw/openclaw" \
-  org.opencontainers.image.url="https://openclaw.ai" \
-  org.opencontainers.image.documentation="https://docs.openclaw.ai/install/docker" \
-  org.opencontainers.image.licenses="MIT" \
-  org.opencontainers.image.title="OpenClaw" \
-  org.opencontainers.image.description="OpenClaw gateway and CLI runtime container image"
+# ========== System Dependencies ==========
+# Note: cloudflared removed - using Fly-Force-Instance-Id routing instead
+# See: https://fly.io/docs/networking/private-networking/#fly-force-instance-id
 
+# Python3 + pip + common packages for scripts and tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-pip python3-venv \
+    ffmpeg \
+    sqlite3 \
+    git \
+    vim \
+    less \
+    jq \
+    curl \
+    wget \
+    telnet \
+    netcat-openbsd \
+    dnsutils \
+    iputils-ping \
+    net-tools \
+    iproute2 \
+    procps \
+    file \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python packages (break-system-packages for Debian 12+)
+RUN pip3 install --no-cache-dir --break-system-packages \
+    requests beautifulsoup4 pillow \
+    httpx aiohttp
+
+# ========== Playwright + Chromium ==========
+# Install Playwright system dependencies for Chromium
+RUN npx playwright install-deps chromium
+# Install Chromium browser
+RUN npx playwright install chromium
+
+
+# ========== Original openclaw build ==========
 # Install Bun (required for build scripts)
 RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.bun/bin:${PATH}"
@@ -20,114 +46,94 @@ ENV PATH="/root/.bun/bin:${PATH}"
 RUN corepack enable
 
 WORKDIR /app
-RUN chown node:node /app
 
 ARG OPENCLAW_DOCKER_APT_PACKAGES=""
 RUN if [ -n "$OPENCLAW_DOCKER_APT_PACKAGES" ]; then \
-      apt-get update && \
-      DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $OPENCLAW_DOCKER_APT_PACKAGES && \
-      apt-get clean && \
-      rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*; \
+    apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $OPENCLAW_DOCKER_APT_PACKAGES && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*; \
     fi
 
-COPY --chown=node:node package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
-COPY --chown=node:node ui/package.json ./ui/package.json
-COPY --chown=node:node patches ./patches
-COPY --chown=node:node scripts ./scripts
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY ui/package.json ./ui/package.json
+COPY patches ./patches
+COPY scripts ./scripts
 
-USER node
-# Reduce OOM risk on low-memory hosts during dependency installation.
-# Docker builds on small VMs may otherwise fail with "Killed" (exit 137).
-RUN NODE_OPTIONS=--max-old-space-size=2048 pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile
 
-# Optionally install Chromium and Xvfb for browser automation.
-# Build with: docker build --build-arg OPENCLAW_INSTALL_BROWSER=1 ...
-# Adds ~300MB but eliminates the 60-90s Playwright install on every container start.
-# Must run after pnpm install so playwright-core is available in node_modules.
-USER root
-ARG OPENCLAW_INSTALL_BROWSER=""
-RUN if [ -n "$OPENCLAW_INSTALL_BROWSER" ]; then \
-      apt-get update && \
-      DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xvfb && \
-      mkdir -p /home/node/.cache/ms-playwright && \
-      PLAYWRIGHT_BROWSERS_PATH=/home/node/.cache/ms-playwright \
-      node /app/node_modules/playwright-core/cli.js install --with-deps chromium && \
-      chown -R node:node /home/node/.cache/ms-playwright && \
-      apt-get clean && \
-      rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*; \
-    fi
-
-# Optionally install Docker CLI for sandbox container management.
-# Build with: docker build --build-arg OPENCLAW_INSTALL_DOCKER_CLI=1 ...
-# Adds ~50MB. Only the CLI is installed — no Docker daemon.
-# Required for agents.defaults.sandbox to function in Docker deployments.
-ARG OPENCLAW_INSTALL_DOCKER_CLI=""
-ARG OPENCLAW_DOCKER_GPG_FINGERPRINT="9DC858229FC7DD38854AE2D88D81803C0EBFCD88"
-RUN if [ -n "$OPENCLAW_INSTALL_DOCKER_CLI" ]; then \
-      apt-get update && \
-      DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        ca-certificates curl gnupg && \
-      install -m 0755 -d /etc/apt/keyrings && \
-      # Verify Docker apt signing key fingerprint before trusting it as a root key.
-      # Update OPENCLAW_DOCKER_GPG_FINGERPRINT when Docker rotates release keys.
-      curl -fsSL https://download.docker.com/linux/debian/gpg -o /tmp/docker.gpg.asc && \
-      expected_fingerprint="$(printf '%s' "$OPENCLAW_DOCKER_GPG_FINGERPRINT" | tr '[:lower:]' '[:upper:]' | tr -d '[:space:]')" && \
-      actual_fingerprint="$(gpg --batch --show-keys --with-colons /tmp/docker.gpg.asc | awk -F: '$1 == \"fpr\" { print toupper($10); exit }')" && \
-      if [ -z "$actual_fingerprint" ] || [ "$actual_fingerprint" != "$expected_fingerprint" ]; then \
-        echo "ERROR: Docker apt key fingerprint mismatch (expected $expected_fingerprint, got ${actual_fingerprint:-<empty>})" >&2; \
-        exit 1; \
-      fi && \
-      gpg --dearmor -o /etc/apt/keyrings/docker.gpg /tmp/docker.gpg.asc && \
-      rm -f /tmp/docker.gpg.asc && \
-      chmod a+r /etc/apt/keyrings/docker.gpg && \
-      printf 'deb [arch=%s signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian bookworm stable\n' \
-        "$(dpkg --print-architecture)" > /etc/apt/sources.list.d/docker.list && \
-      apt-get update && \
-      DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        docker-ce-cli docker-compose-plugin && \
-      apt-get clean && \
-      rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*; \
-    fi
-
-USER node
-COPY --chown=node:node . .
-# Normalize copied plugin/agent paths so plugin safety checks do not reject
-# world-writable directories inherited from source file modes.
-RUN for dir in /app/extensions /app/.agent /app/.agents; do \
-      if [ -d "$dir" ]; then \
-        find "$dir" -type d -exec chmod 755 {} +; \
-        find "$dir" -type f -exec chmod 644 {} +; \
-      fi; \
-    done
-RUN pnpm build
+COPY . .
+RUN OPENCLAW_A2UI_SKIP_MISSING=1 pnpm build
 # Force pnpm for UI build (Bun may fail on ARM/Synology architectures)
 ENV OPENCLAW_PREFER_PNPM=1
 RUN pnpm ui:build
 
-# Expose the CLI binary without requiring npm global writes as non-root.
-USER root
-RUN ln -sf /app/openclaw.mjs /usr/local/bin/openclaw \
- && chmod 755 /app/openclaw.mjs
+# ========== CLI Commands ==========
+# Add openclaw command to PATH
+RUN ln -s /app/openclaw.mjs /usr/local/bin/openclaw && \
+    chmod +x /app/openclaw.mjs
+
+# Install clawhub CLI to system location (before setting persistent env vars)
+# This ensures clawhub is always available in the image
+RUN npm install -g clawhub
+
+# ========== Environment Variables ==========
+# OpenClaw state directory
+ENV OPENCLAW_STATE_DIR=/data
+
+# Persistent package storage (unified for npm, pnpm, pip)
+# Set these AFTER installing build-time packages so they don't affect build
+# These will be used for runtime package installations (user-installed packages)
+ENV PERSISTENT_PACKAGES=/data/.packages
+
+# npm configuration
+ENV NPM_CONFIG_PREFIX=/data/.packages/npm
+
+# pnpm configuration
+ENV PNPM_HOME=/data/.packages/pnpm
+
+# Python (pip) configuration
+ENV PYTHONUSERBASE=/data/.packages/python
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
+ENV PIP_USER=true
+
+# System PATH with persistent package bins
+ENV PATH="/data/.packages/npm/bin:/data/.packages/pnpm:/data/.packages/python/bin:${PATH}"
 
 ENV NODE_ENV=production
 
-# Security hardening: Run as non-root user
-# The node:22-bookworm image includes a 'node' user (uid 1000)
-# This reduces the attack surface by preventing container escape via root privileges
-USER node
+# ========== Clean up unnecessary files ==========
+# Remove build artifacts and development files to reduce image size
+RUN rm -rf \
+    Dockerfile \
+    fly.toml \
+    .git \
+    *.md \
+    **/*.test.ts \
+    **/*.spec.ts \
+    coverage \
+    .vscode \
+    .idea \
+    node_modules/.cache \
+    .bun-cache \
+    .pnpm-store
 
-# Start gateway server with default config.
-# Binds to loopback (127.0.0.1) by default for security.
-#
-# IMPORTANT: With Docker bridge networking (-p 18789:18789), loopback bind
-# makes the gateway unreachable from the host. Either:
-#   - Use --network host, OR
-#   - Override --bind to "lan" (0.0.0.0) and set auth credentials
-#
-# Built-in probe endpoints for container health checks:
-#   - GET /healthz (liveness) and GET /readyz (readiness)
-#   - aliases: /health and /ready
-# For external access from host/ingress, override bind to "lan" and set auth.
-HEALTHCHECK --interval=3m --timeout=10s --start-period=15s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:18789/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-CMD ["node", "openclaw.mjs", "gateway", "--allow-unconfigured"]
+# ========== Default Configuration ==========
+# Copy default config template for SaaS deployment
+# This will be copied to /data/.openclaw/openclaw.json on first container startup
+COPY openclaw.default.json /opt/openclaw/openclaw.default.json
+
+# ========== Data Directory ==========
+# Create data directories for Fly Volume mount
+RUN mkdir -p /data/.openclaw /data/clawd /data/workspace
+
+# ========== Entrypoint ==========
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+WORKDIR /app
+
+# Expose openclaw gateway port
+EXPOSE 18789
+
+ENTRYPOINT ["/entrypoint.sh"]
