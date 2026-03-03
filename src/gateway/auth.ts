@@ -12,6 +12,7 @@ import {
   type RateLimitCheckResult,
 } from "./auth-rate-limit.js";
 import { resolveGatewayCredentialsFromValues } from "./credentials.js";
+import { getBearerToken } from "./http-utils.js";
 import {
   isLocalishHost,
   isLoopbackAddress,
@@ -435,11 +436,13 @@ export async function authorizeGatewayConnect(
     if (!auth.token) {
       return { ok: false, reason: "token_missing_config" };
     }
-    if (!connectAuth?.token) {
+    // Priority: connectAuth.token > Authorization header
+    const providedToken = connectAuth?.token || (req ? getBearerToken(req) : undefined);
+    if (!providedToken) {
       limiter?.recordFailure(ip, rateLimitScope);
       return { ok: false, reason: "token_missing" };
     }
-    if (!safeEqualSecret(connectAuth.token, auth.token)) {
+    if (!safeEqualSecret(providedToken, auth.token)) {
       limiter?.recordFailure(ip, rateLimitScope);
       return { ok: false, reason: "token_mismatch" };
     }
