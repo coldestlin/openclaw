@@ -14,7 +14,8 @@
     "controlUi": {
       "enabled": true,
       "allowedOrigins": ["${OPENCLAW_GATEWAY_CONTROL_UI_ALLOWED_ORIGINS}"],
-      "allowInsecureAuth": true
+      "allowInsecureAuth": true,
+      "dangerouslyDisableDeviceAuth": true
     },
     "auth": {
       "mode": "token",
@@ -100,5 +101,48 @@
   "browser": {
     "enabled": true,
     "headless": true
+  },
+  "messages": {
+    "ackReactionScope": "group-mentions"
+  },
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto"
+  },
+  "channels": {
+    "telegram": {
+      "enabled": false,
+      "dmPolicy": "pairing",
+      "botToken": "__OPENCLAW_REDACTED__",
+      "groupPolicy": "allowlist",
+      "streamMode": "partial",
+      "webhookUrl": "https://xxx.openclaw.ski/webhook/telegram",
+      "webhookSecret": "__OPENCLAW_REDACTED__",
+      "webhookPath": "/telegram-webhook"
+    },
+    "feishu": {
+      "enabled": false,
+      "connectionMode": "webhook",
+      "verificationToken": "random",
+      "webhookPath": "/feishu/events",
+      "webhookHost": "xxx.openclaw.ski",
+      "accounts": {
+        "main": {
+          "appId": "cli_xxx",
+          "appSecret": "xxx",
+          "botName": "My AI assistant"
+        }
+      }
+    }
+  },
+  "plugins": {
+    "entries": {
+      "telegram": {
+        "enabled": true
+      },
+      "feishu": {
+        "enabled": true
+      }
+    }
   }
 }
