@@ -31,11 +31,20 @@ RUN pip3 install --no-cache-dir --break-system-packages \
     requests beautifulsoup4 pillow \
     httpx aiohttp
 
-# ========== Playwright + Chromium ==========
-# Install Playwright system dependencies for Chromium
-RUN npx playwright install-deps chromium
-# Install Chromium browser
-RUN npx playwright install chromium
+# # ========== Playwright + Chromium ==========
+# 设置 Playwright 环境变量
+ENV PLAYWRIGHT_BROWSERS_PATH=/data/.playwright/browsers
+ENV PLAYWRIGHT_CONFIG=/data/.playwright/config
+
+# 创建持久化目录
+RUN mkdir -p /data/.playwright/browsers /data/.playwright/config /data/.playwright/cache
+
+# 安装 Playwright 依赖和浏览器
+RUN npx playwright install-deps chromium && \
+    PLAYWRIGHT_BROWSERS_PATH=/data/.playwright/browsers npx playwright install chromium
+
+# 确保权限
+RUN chmod -R 755 /data/.playwright
 
 
 # ========== Original openclaw build ==========
@@ -81,6 +90,11 @@ RUN npm install -g clawhub
 # OpenClaw state directory
 ENV OPENCLAW_STATE_DIR=/data
 
+# Startup optimization (must be set before entry.ts runs)
+ENV NODE_COMPILE_CACHE=/data/node-compile-cache
+ENV OPENCLAW_NO_RESPAWN=1
+ENV NODE_OPTIONS=--disable-warning=ExperimentalWarning
+
 # Persistent package storage (unified for npm, pnpm, pip)
 # Set these AFTER installing build-time packages so they don't affect build
 # These will be used for runtime package installations (user-installed packages)
@@ -125,7 +139,7 @@ COPY openclaw.default.json /opt/openclaw/openclaw.default.json
 
 # ========== Data Directory ==========
 # Create data directories for Fly Volume mount
-RUN mkdir -p /data/.openclaw /data/clawd /data/workspace
+RUN mkdir -p /data/.openclaw /data/clawd /data/workspace /data/node-compile-cache
 
 # ========== Entrypoint ==========
 COPY entrypoint.sh /entrypoint.sh
