@@ -1,4 +1,3 @@
-import type { Tab } from "./navigation.ts";
 import { connectGateway } from "./app-gateway.ts";
 import {
   startLogsPolling,
@@ -18,6 +17,8 @@ import {
   syncThemeWithSettings,
 } from "./app-settings.ts";
 import { startHeartbeat, stopHeartbeat } from "./heartbeat.ts";
+import { startInactivityDetection, stopInactivityDetection } from "./inactivity.ts";
+import type { Tab } from "./navigation.ts";
 import { startTokenRefresh, stopTokenRefresh } from "./token-refresh.ts";
 
 type LifecycleHost = {
@@ -49,6 +50,8 @@ export function handleConnected(host: LifecycleHost) {
   void startTokenRefresh();
   // Start heartbeat to keep instance alive (30s interval)
   void startHeartbeat();
+  // Start inactivity detection to stop heartbeat when user is away
+  startInactivityDetection();
   if (host.tab === "logs") {
     startLogsPolling(host as unknown as Parameters<typeof startLogsPolling>[0]);
   }
@@ -66,6 +69,7 @@ export function handleDisconnected(host: LifecycleHost) {
   stopNodesPolling(host as unknown as Parameters<typeof stopNodesPolling>[0]);
   stopLogsPolling(host as unknown as Parameters<typeof stopLogsPolling>[0]);
   stopDebugPolling(host as unknown as Parameters<typeof stopDebugPolling>[0]);
+  stopInactivityDetection();
   stopTokenRefresh();
   stopHeartbeat();
   detachThemeListener(host as unknown as Parameters<typeof detachThemeListener>[0]);
