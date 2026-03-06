@@ -1,5 +1,3 @@
-import type { TlsOptions } from "node:tls";
-import type { WebSocketServer } from "ws";
 import {
   createServer as createHttpServer,
   type Server as HttpServer,
@@ -7,12 +5,14 @@ import {
   type ServerResponse,
 } from "node:http";
 import { createServer as createHttpsServer } from "node:https";
-import type { CanvasHostHandler } from "../canvas-host/server.js";
-import type { createSubsystemLogger } from "../logging/subsystem.js";
-import type { GatewayWsClient } from "./server/ws-types.js";
+import type { TlsOptions } from "node:tls";
+import type { WebSocketServer } from "ws";
 import { resolveAgentAvatar } from "../agents/identity-avatar.js";
 import { CANVAS_WS_PATH, handleA2uiHttpRequest } from "../canvas-host/a2ui.js";
+import type { CanvasHostHandler } from "../canvas-host/server.js";
 import { loadConfig } from "../config/config.js";
+import { handleFeishuHttpRequest } from "../feishu-http-registry.js";
+import type { createSubsystemLogger } from "../logging/subsystem.js";
 import { safeEqualSecret } from "../security/secret-equal.js";
 import { handleSlackHttpRequest } from "../slack/http/index.js";
 import { handleTelegramHttpRequest } from "../telegram/http/index.js";
@@ -56,6 +56,7 @@ import {
   enforcePluginRouteGatewayAuth,
   isCanvasPath,
 } from "./server/http-auth.js";
+import type { GatewayWsClient } from "./server/ws-types.js";
 import { handleToolsInvokeHttpRequest } from "./tools-invoke-http.js";
 
 type SubsystemLogger = ReturnType<typeof createSubsystemLogger>;
@@ -442,6 +443,9 @@ export function createGatewayHttpServer(opts: {
         return;
       }
       if (await handleTelegramHttpRequest(req, res)) {
+        return;
+      }
+      if (await handleFeishuHttpRequest(req, res)) {
         return;
       }
       if (openResponsesEnabled) {

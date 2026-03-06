@@ -4,6 +4,8 @@ import {
   applyBasicWebhookRequestGuards,
   type RuntimeEnv,
   installRequestBodyLimitGuard,
+  type FeishuHttpRequestHandler,
+  normalizeFeishuWebhookPath,
 } from "openclaw/plugin-sdk";
 import { createFeishuWSClient } from "./client.js";
 import {
@@ -160,4 +162,77 @@ export async function monitorWebhook({
       reject(err);
     });
   });
+}
+
+// ============================================================================
+// Gateway mode: createFeishuWebhookHandler
+// ============================================================================
+
+export type CreateFeishuWebhookHandlerOpts = {
+  account: ResolvedFeishuAccount;
+  accountId: string;
+  runtime?: RuntimeEnv;
+  eventDispatcher: Lark.EventDispatcher;
+};
+
+export type CreateFeishuWebhookHandlerResult = {
+  handler: FeishuHttpRequestHandler;
+  path: string;
+  stop: () => void;
+};
+
+/**
+ * Creates a Feishu webhook handler for Gateway mode.
+ * Unlike monitorWebhook(), this doesn't create its own HTTP server.
+ * Instead, it returns a handler that can be registered with the Gateway HTTP server.
+ */
+export async function createFeishuWebhookHandler(
+  opts: CreateFeishuWebhookHandlerOpts,
+): Promise<CreateFeishuWebhookHandlerResult> {
+  const { account, accountId, runtime, eventDispatcher } = opts;
+  const error = runtime?.error ?? console.error;
+  const path = normalizeFeishuWebhookPath(account.config.webhookPath);
+
+  const webhookHandler = Lark.adaptDefault(path, eventDispatcher, { autoChallenge: true });
+
+  const handler: FeishuHttpRequestHandler = async (req, res) => {
+    res.on("finish", () => {
+      recordWebhookStatus(runtime, accountId, path, res.statusCode);
+    });
+
+    const rateLimitKey = `${accountId}:${path}:${req.socket.remoteAddress ?? "unknown"}`;
+    if (
+      !applyBasicWebhookRequestGuards({
+        req,
+        res,
+        rateLimiter: feishuWebhookRateLimiter,
+        rateLimitKey,
+        nowMs: Date.now(),
+        requireJsonContentType: true,
+      })
+    ) {
+      return;
+    }
+
+    const guard = installRequestBodyLimitGuard(req, res, {
+      maxBytes: FEISHU_WEBHOOK_MAX_BODY_BYTES,
+      timeoutMs: FEISHU_WEBHOOK_BODY_TIMEOUT_MS,
+      responseFormat: "text",
+    });
+    if (guard.isTripped()) {
+      return;
+    }
+
+    try {
+      await webhookHandler(req, res);
+    } catch (err) {
+      if (!guard.isTripped()) {
+        error(`feishu[${accountId}]: webhook handler error: ${String(err)}`);
+      }
+    } finally {
+      guard.dispose();
+    }
+  };
+
+  return { handler, path, stop: () => {} };
 }

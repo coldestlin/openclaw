@@ -644,3 +644,11 @@ export { loadWebMedia, type WebMediaResult } from "../web/media.js";
 
 // Security utilities
 export { redactSensitiveText } from "../logging/redact.js";
+
+// Feishu HTTP webhook registry (for Gateway mode)
+export {
+  type FeishuHttpRequestHandler,
+  handleFeishuHttpRequest,
+  normalizeFeishuWebhookPath,
+  registerFeishuHttpHandler,
+} from "../feishu-http-registry.js";

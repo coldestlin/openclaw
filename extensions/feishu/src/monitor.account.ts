@@ -1,6 +1,7 @@
 import * as crypto from "crypto";
 import * as Lark from "@larksuiteoapi/node-sdk";
 import type { ClawdbotConfig, RuntimeEnv, HistoryEntry } from "openclaw/plugin-sdk";
+import { registerFeishuHttpHandler } from "openclaw/plugin-sdk";
 import { resolveFeishuAccount } from "./accounts.js";
 import { raceWithTimeoutAndAbort } from "./async.js";
 import { handleFeishuMessage, type FeishuMessageEvent, type FeishuBotAddedEvent } from "./bot.js";
@@ -8,11 +9,25 @@ import { handleFeishuCardAction, type FeishuCardActionEvent } from "./card-actio
 import { createEventDispatcher } from "./client.js";
 import { fetchBotOpenIdForMonitor } from "./monitor.startup.js";
 import { botOpenIds } from "./monitor.state.js";
-import { monitorWebhook, monitorWebSocket } from "./monitor.transport.js";
+import {
+  monitorWebhook,
+  monitorWebSocket,
+  createFeishuWebhookHandler,
+} from "./monitor.transport.js";
 import { getMessageFeishu } from "./send.js";
 import type { ResolvedFeishuAccount } from "./types.js";
 
 const FEISHU_REACTION_VERIFY_TIMEOUT_MS = 1_500;
+
+function waitForAbortSignal(abortSignal?: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (abortSignal?.aborted) {
+      resolve();
+      return;
+    }
+    abortSignal?.addEventListener("abort", () => resolve(), { once: true });
+  });
+}
 
 export type FeishuReactionCreatedEvent = {
   message_id: string;
@@ -280,6 +295,38 @@ export async function monitorSingleAccount(params: MonitorSingleAccountParams): 
   });
 
   if (connectionMode === "webhook") {
+    // Use Gateway mode when webhookPath is provided without webhookPort
+    const webhookPort = account.config.webhookPort;
+    const webhookPath = account.config.webhookPath;
+
+    if (webhookPath && !webhookPort) {
+      // Gateway mode: register handler to Gateway HTTP server
+      const { handler, path, stop } = await createFeishuWebhookHandler({
+        account,
+        accountId,
+        runtime,
+        eventDispatcher,
+      });
+
+      const unregisterHttpHandler = registerFeishuHttpHandler({
+        path,
+        handler,
+        log: runtime?.log,
+        accountId,
+      });
+
+      log(`feishu[${accountId}]: webhook handler registered at ${path}`);
+
+      try {
+        await waitForAbortSignal(abortSignal);
+      } finally {
+        unregisterHttpHandler();
+        stop();
+      }
+      return;
+    }
+
+    // Standalone server mode (backward compatibility)
     return monitorWebhook({ account, accountId, runtime, abortSignal, eventDispatcher });
   }
   return monitorWebSocket({ account, accountId, runtime, abortSignal, eventDispatcher });
